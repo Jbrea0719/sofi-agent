@@ -446,6 +446,22 @@ export default function ChatPage() {
                     {streamingPair.assistant
                       ? <ReactMarkdown>{fixMarkdown(streamingPair.assistant)}</ReactMarkdown>
                       : <span style={{ color: GOLD_DIM }} className="animate-pulse">···</span>}
+                    {/* 처리 중 스피너 — isLoading 동안 항상 표시 */}
+                    {isLoading && (() => {
+                      const txt = streamingPair.assistant;
+                      const label =
+                        txt.includes("검색 에이전트") && !txt.match(/검색 에이전트.*✅/) ? "검색 중" :
+                        txt.includes("정리 에이전트") && !txt.match(/정리 에이전트.*✅/) ? "정리 중" :
+                        txt.includes("검토 에이전트") && !txt.match(/검토 에이전트.*(✅|⚠️)/) ? "검토 중" :
+                        txt.includes("소피가 정리한 최종 답변") ? "답변 작성 중" : "처리 중";
+                      return (
+                        <div className="flex items-center gap-2 mt-3 pt-2" style={{ borderTop: `1px solid ${GOLD_FAINT}` }}>
+                          <div className="w-3.5 h-3.5 rounded-full border-2 animate-spin flex-shrink-0"
+                            style={{ borderColor: GOLD_DIM, borderTopColor: "transparent" }} />
+                          <span className="text-xs animate-pulse" style={{ color: GOLD_DIM }}>{label}...</span>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
