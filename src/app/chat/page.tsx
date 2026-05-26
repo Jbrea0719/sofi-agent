@@ -106,6 +106,7 @@ export default function ChatPage() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const streamingRawRef = useRef<string>("");
 
   useEffect(() => {
     const saved = localStorage.getItem("agent_nickname");
@@ -179,6 +180,7 @@ export default function ChatPage() {
 
     const controller = new AbortController();
     abortControllerRef.current = controller;
+    streamingRawRef.current = "";
 
     try {
       const response = await fetch("/api/agent", {
@@ -195,8 +197,13 @@ export default function ChatPage() {
         const { done, value } = await reader.read();
         if (done) break;
         assistantText += decoder.decode(value);
-        // 화면에는 메타데이터 마커 이전까지만 표시
-        const displayText = assistantText.replace(/\n__SOFI_CRITIC_START__[\s\S]*?__SOFI_CRITIC_END__$/, "");
+        streamingRawRef.current = assistantText;
+        // 화면에는 진행 상태·메타데이터 마커 제외, 답변 부분만 표시
+        let displayText = assistantText.replace(/\n__SOFI_CRITIC_START__[\s\S]*?__SOFI_CRITIC_END__$/, "");
+        const dispAnswerIdx = displayText.indexOf("__SOFI_ANSWER_START__");
+        if (dispAnswerIdx !== -1) {
+          displayText = displayText.slice(dispAnswerIdx + "__SOFI_ANSWER_START__".length).trimStart();
+        }
         setStreamingPair({ user: trimmed, assistant: displayText });
       }
 
@@ -207,6 +214,11 @@ export default function ChatPage() {
       if (criticMatch) {
         try { criticHistory = JSON.parse(criticMatch[1]); } catch { /* 무시 */ }
         cleanText = assistantText.replace(/\n__SOFI_CRITIC_START__[\s\S]*?__SOFI_CRITIC_END__/, "");
+      }
+      // 진행 상태 텍스트 제거: __SOFI_ANSWER_START__ 이후만 답변으로 사용
+      const answerStartIdx = cleanText.indexOf("__SOFI_ANSWER_START__");
+      if (answerStartIdx !== -1) {
+        cleanText = cleanText.slice(answerStartIdx + "__SOFI_ANSWER_START__".length).trimStart();
       }
 
       setPairs((prev) => [...prev, {
@@ -409,12 +421,18 @@ export default function ChatPage() {
                         <div className="mt-2 space-y-2">
                           {pair.critic_history.map((c) => (
                             <div key={c.round} className="px-3 py-2 rounded-xl text-xs" style={{ backgroundColor: c.approved ? "rgba(52,211,153,0.08)" : "rgba(251,191,36,0.08)", border: `1px solid ${c.approved ? "rgba(52,211,153,0.25)" : "rgba(251,191,36,0.25)"}` }}>
-                              <div className="flex items-center gap-1.5 mb-1 font-semibold" style={{ color: c.approved ? "#34d399" : "#fbbf24" }}>
-                                {c.approved ? "✅" : "⚠️"} {c.round}차 검토 — {c.approved ? "통과" : "보완 요청"}
+                              <div className="flex items-center gap-1.5 mb-2 font-semibold" style={{ color: c.approved ? "#34d399" : "#fbbf24" }}>
+                                {c.approved ? "✅" : "⚠️"} {c.round}차 기획 검토 — {c.approved ? "통과" : "보완 요청"}
                               </div>
-                              <p className="leading-relaxed whitespace-pre-wrap" style={{ color: "#c8c0b0" }}>
-                                {c.feedback.replace(/^(APPROVED|NEEDS_IMPROVEMENT)\s*/i, "").trim()}
-                              </p>
+                              <div className="prose prose-sm max-w-none leading-relaxed" style={{ color: "#c8c0b0" }}>
+                                <ReactMarkdown>{
+                                  c.feedback
+                                    .replace(/^(APPROVED|NEEDS_IMPROVEMENT)[^\n]*/i, "")
+                                    .replace(/#+\s*(APPROVED|NEEDS_IMPROVEMENT)[^\n]*/gi, "")
+                                    .replace(/^\s*---\s*$/gm, "")
+                                    .trim()
+                                }</ReactMarkdown>
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -484,14 +502,14 @@ export default function ChatPage() {
                     {streamingPair.assistant
                       ? <ReactMarkdown>{fixMarkdown(streamingPair.assistant)}</ReactMarkdown>
                       : <span style={{ color: GOLD_DIM }} className="animate-pulse">···</span>}
-                    {/* 처리 중 스피너 — isLoading 동안 항상 표시 */}
+                    {/* 처리 중 스피너 — isLoading 동안 항상 표시 (원본 스트림으로 단계 감지) */}
                     {isLoading && (() => {
-                      const txt = streamingPair.assistant;
+                      const txt = streamingRawRef.current;
                       const label =
                         txt.includes("검색 에이전트") && !txt.match(/검색 에이전트.*✅/) ? "검색 중" :
                         txt.includes("정리 에이전트") && !txt.match(/정리 에이전트.*✅/) ? "정리 중" :
-                        txt.includes("검토 에이전트") && !txt.match(/검토 에이전트.*(✅|⚠️)/) ? "검토 중" :
-                        txt.includes("소피가 정리한 최종 답변") ? "답변 작성 중" : "처리 중";
+                        txt.includes("검토 에이전트") && !txt.match(/검토 에이전트.*(✅|📋)/) ? "검토 중" :
+                        txt.includes("__SOFI_ANSWER_START__") ? "답변 작성 중" : "처리 중";
                       return (
                         <div className="flex items-center gap-2 mt-3 pt-2" style={{ borderTop: `1px solid ${GOLD_FAINT}` }}>
                           <div className="w-3.5 h-3.5 rounded-full border-2 animate-spin flex-shrink-0"

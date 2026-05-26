@@ -151,10 +151,16 @@ async function criticAgent(
 - 게임 기획에 실제로 활용하기에 정보가 충분히 구체적인가?
 - 출처 불명의 추측성 내용이 섞여 있지 않은가?
 
-판정 기준:
-- 4가지 기준을 모두 충족하면 첫 줄에 반드시 "APPROVED" 라고 써요
-- 하나라도 부족하면 첫 줄에 "NEEDS_IMPROVEMENT" 라고 쓰고,
-  어떤 기준이 부족한지 + 어떤 정보를 추가로 찾아야 하는지 구체적으로 적어요`,
+출력 형식 (반드시 이 형식 그대로):
+첫 줄에 "APPROVED" 또는 "NEEDS_IMPROVEMENT" 한 단어만 쓰고 빈 줄 하나 후,
+아래 4줄 형식으로만 답해요. 헤더(#), 추가 섹션, 긴 설명 금지.
+
+**① 영웅화 가능성**: [✅통과 / ⚠️보완 / ❌미흡] — [한 문장]
+**② 장르 적합성**: [✅통과 / ⚠️보완 / ❌미흡] — [한 문장, 핵심 문제만]
+**③ 게임 스토리**: [✅통과 / ⚠️보완 / ❌미흡] — [한 문장, 핵심 문제만]
+**④ 정보 완성도**: [✅통과 / ⚠️보완 / ❌미흡] — [한 문장]
+
+빈 줄 후 딱 한 줄: 💡 **핵심 보완**: [가장 중요한 것 1가지만, 한 문장]`,
     messages: [{
       role: "user",
       content: `원래 질문: ${userQuery}\n\n정리된 답변:\n${summary}\n\n영웅수집형 게임 스토리 디렉터 관점에서 이 답변을 검토해줘.`
@@ -195,7 +201,7 @@ async function runMultiAgentPipeline(
   onChunk(approved ? `✅ 검토 통과!\n\n---\n\n` : `📋 검토 완료 (피드백은 아래 버튼에서 확인)\n\n---\n\n`);
 
   // 소피 말투로 최종 답변 변환
-  onChunk(`💬 **소피가 정리한 최종 답변:**\n\n`);
+  onChunk(`💬 **소피가 정리한 최종 답변:**\n\n__SOFI_ANSWER_START__`);
   const finalRes = await client.messages.create({
     model: "claude-sonnet-4-5",
     max_tokens: detailed ? 8192 : 800,
