@@ -237,6 +237,10 @@ async function runMultiAgentPipeline(
     .join("");
 
   onChunk(finalText);
+  // 토큰 한도로 잘린 경우 클라이언트에 알림
+  if (finalRes.stop_reason === "max_tokens") {
+    onChunk("__TRUNCATED__");
+  }
 
   // 지적 에이전트 피드백 메타데이터를 스트림 끝에 첨부 (클라이언트에서 파싱 후 분리)
   onChunk(`\n__SOFI_CRITIC_START__${JSON.stringify(criticHistory)}__SOFI_CRITIC_END__`);

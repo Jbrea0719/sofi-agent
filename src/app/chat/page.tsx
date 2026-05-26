@@ -96,6 +96,15 @@ function fixMarkdown(text: string): string {
     .replace(/\*\*'([^']+)'\*\*/g, "**$1**");
 }
 
+// 토큰 한도 초과로 잘린 경우 불완전한 마지막 줄 제거
+function cleanTruncated(text: string): string {
+  let clean = text.replace("__TRUNCATED__", "").trimEnd();
+  if (/([요다죠네해)]|[!?.。！？])\s*$/.test(clean)) return clean;
+  const lastNL = clean.lastIndexOf("\n");
+  if (lastNL > 0) return clean.slice(0, lastNL).trimEnd();
+  return clean;
+}
+
 export default function ChatPage() {
   const [pairs, setPairs] = useState<MessagePair[]>([]);
   const [streamingPair, setStreamingPair] = useState<{ user: string; assistant: string } | null>(null);
@@ -137,7 +146,8 @@ export default function ChatPage() {
   }, [streamingPair]);
 
   function scrollToBottom() {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
   }
 
   function handleScroll() {
@@ -224,6 +234,7 @@ export default function ChatPage() {
         if (dispAnswerIdx !== -1) {
           displayText = displayText.slice(dispAnswerIdx + "__SOFI_ANSWER_START__".length).trimStart();
         }
+        displayText = displayText.replace("__TRUNCATED__", "");
         setStreamingPair({ user: trimmed, assistant: displayText });
       }
 
@@ -239,6 +250,9 @@ export default function ChatPage() {
       const answerStartIdx = cleanText.indexOf("__SOFI_ANSWER_START__");
       if (answerStartIdx !== -1) {
         cleanText = cleanText.slice(answerStartIdx + "__SOFI_ANSWER_START__".length).trimStart();
+      }
+      if (cleanText.includes("__TRUNCATED__")) {
+        cleanText = cleanTruncated(cleanText);
       }
 
       const hadScrolledUp = userScrolledUpRef.current;
@@ -312,8 +326,10 @@ export default function ChatPage() {
         const { done, value } = await reader.read();
         if (done) break;
         text += decoder.decode(value);
-        setPairs((prev) => prev.map((p) => p.pair_id === pairId ? { ...p, detail_content: text } : p));
+        setPairs((prev) => prev.map((p) => p.pair_id === pairId ? { ...p, detail_content: text.replace("__TRUNCATED__", "") } : p));
       }
+      const finalDetailText = text.includes("__TRUNCATED__") ? cleanTruncated(text) : text;
+      setPairs((prev) => prev.map((p) => p.pair_id === pairId ? { ...p, detail_content: finalDetailText } : p));
     } catch {
       setPairs((prev) => prev.map((p) => p.pair_id === pairId ? { ...p, detail_content: "오류가 발생했습니다." } : p));
     } finally {
@@ -352,8 +368,10 @@ export default function ChatPage() {
         const { done, value } = await reader.read();
         if (done) break;
         text += decoder.decode(value);
-        setPairs(prev => prev.map(p => p.pair_id === pairId ? { ...p, feedback_summary: text } : p));
+        setPairs(prev => prev.map(p => p.pair_id === pairId ? { ...p, feedback_summary: text.replace("__TRUNCATED__", "") } : p));
       }
+      const finalFeedbackText = text.includes("__TRUNCATED__") ? cleanTruncated(text) : text;
+      setPairs(prev => prev.map(p => p.pair_id === pairId ? { ...p, feedback_summary: finalFeedbackText } : p));
     } catch {
       setPairs(prev => prev.map(p => p.pair_id === pairId ? { ...p, feedback_summary: "요약을 불러오지 못했어요." } : p));
     } finally {
