@@ -177,6 +177,7 @@ async function runMultiAgentPipeline(
 ): Promise<string> {
   let critique = "";
   let finalSummary = "";
+  const criticHistory: { round: number; approved: boolean; feedback: string }[] = [];
 
   for (let round = 0; round < 2; round++) {
     const roundLabel = round === 0 ? "1차" : "2차 (보완)";
@@ -194,6 +195,7 @@ async function runMultiAgentPipeline(
     // 에이전트 3: 지적
     onChunk(`🔎 **[${roundLabel}] 검토 에이전트** 검토 중...\n`);
     const { approved, feedback } = await criticAgent(userQuery, summary);
+    criticHistory.push({ round: round + 1, approved, feedback });
 
     if (approved) {
       onChunk(`✅ 검토 통과! 최종 답변을 드릴게요\n\n---\n\n`);
@@ -202,7 +204,7 @@ async function runMultiAgentPipeline(
     } else {
       onChunk(`⚠️ 보완 필요 — 추가 검색 시작\n\n`);
       critique = feedback;
-      finalSummary = summary; // 마지막 라운드면 이걸 씀
+      finalSummary = summary;
     }
   }
 
@@ -237,6 +239,10 @@ async function runMultiAgentPipeline(
     .join("");
 
   onChunk(finalText);
+
+  // 지적 에이전트 피드백 메타데이터를 스트림 끝에 첨부 (클라이언트에서 파싱 후 분리)
+  onChunk(`\n__SOFI_CRITIC_START__${JSON.stringify(criticHistory)}__SOFI_CRITIC_END__`);
+
   return finalText;
 }
 

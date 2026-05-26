@@ -10,6 +10,8 @@ type Message = {
   is_deleted?: boolean;
 };
 
+type CriticEntry = { round: number; approved: boolean; feedback: string };
+
 type MessagePair = {
   pair_id: string;
   user: Message;
@@ -19,6 +21,8 @@ type MessagePair = {
   detail_loading?: boolean;
   detail_shown?: boolean;
   timestamp?: string;
+  critic_history?: CriticEntry[];
+  critic_shown?: boolean;
 };
 
 function getTime() {
@@ -157,14 +161,27 @@ export default function ChatPage() {
         const { done, value } = await reader.read();
         if (done) break;
         assistantText += decoder.decode(value);
-        setStreamingPair({ user: trimmed, assistant: assistantText });
+        // 화면에는 메타데이터 마커 이전까지만 표시
+        const displayText = assistantText.replace(/\n__SOFI_CRITIC_START__[\s\S]*?__SOFI_CRITIC_END__$/, "");
+        setStreamingPair({ user: trimmed, assistant: displayText });
       }
+
+      // 메타데이터 파싱 및 분리
+      const criticMatch = assistantText.match(/__SOFI_CRITIC_START__([\s\S]*?)__SOFI_CRITIC_END__/);
+      let criticHistory: CriticEntry[] | undefined;
+      let cleanText = assistantText;
+      if (criticMatch) {
+        try { criticHistory = JSON.parse(criticMatch[1]); } catch { /* 무시 */ }
+        cleanText = assistantText.replace(/\n__SOFI_CRITIC_START__[\s\S]*?__SOFI_CRITIC_END__/, "");
+      }
+
       setPairs((prev) => [...prev, {
         pair_id: pairId,
         user: { role: "user", content: trimmed, pair_id: pairId },
-        assistant: { role: "assistant", content: assistantText, pair_id: pairId },
+        assistant: { role: "assistant", content: cleanText, pair_id: pairId },
         is_deleted: false,
         timestamp: time,
+        critic_history: criticHistory,
       }]);
       setStreamingPair(null);
     } catch {
@@ -344,6 +361,30 @@ export default function ChatPage() {
                     <div className="flex gap-2 ml-1 mt-1">
                       <button onClick={() => downloadFile(pair.assistant.content, `소피_답변_${pair.pair_id.slice(0,6)}`, "txt")} className="text-xs px-2 py-1 rounded-lg" style={{ backgroundColor: "rgba(212,175,55,0.1)", border: `1px solid ${GOLD_FAINT}`, color: GOLD_DIM }}>📄 TXT</button>
                       <button onClick={() => downloadFile(pair.assistant.content, `소피_답변_${pair.pair_id.slice(0,6)}`, "doc")} className="text-xs px-2 py-1 rounded-lg" style={{ backgroundColor: "rgba(212,175,55,0.1)", border: `1px solid ${GOLD_FAINT}`, color: GOLD_DIM }}>📝 Word</button>
+                    </div>
+                  )}
+                  {pair.critic_history && pair.critic_history.length > 0 && (
+                    <div className="ml-1">
+                      <button
+                        onClick={() => setPairs(prev => prev.map(p => p.pair_id === pair.pair_id ? { ...p, critic_shown: !p.critic_shown } : p))}
+                        className="text-xs flex items-center gap-1 w-fit"
+                        style={{ color: "rgba(52,211,153,0.7)" }}>
+                        {pair.critic_shown ? "▲ 기획 피드백 접기" : "🎮 기획 피드백 보기"}
+                      </button>
+                      {pair.critic_shown && (
+                        <div className="mt-2 space-y-2">
+                          {pair.critic_history.map((c) => (
+                            <div key={c.round} className="px-3 py-2 rounded-xl text-xs" style={{ backgroundColor: c.approved ? "rgba(52,211,153,0.08)" : "rgba(251,191,36,0.08)", border: `1px solid ${c.approved ? "rgba(52,211,153,0.25)" : "rgba(251,191,36,0.25)"}` }}>
+                              <div className="flex items-center gap-1.5 mb-1 font-semibold" style={{ color: c.approved ? "#34d399" : "#fbbf24" }}>
+                                {c.approved ? "✅" : "⚠️"} {c.round}차 검토 — {c.approved ? "통과" : "보완 요청"}
+                              </div>
+                              <p className="leading-relaxed whitespace-pre-wrap" style={{ color: "#c8c0b0" }}>
+                                {c.feedback.replace(/^(APPROVED|NEEDS_IMPROVEMENT)\s*/i, "").trim()}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                   <button onClick={() => loadDetail(pair.pair_id)} className="text-xs ml-1 flex items-center gap-1 w-fit" style={{ color: GOLD_DIM }}>
