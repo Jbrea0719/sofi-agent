@@ -388,26 +388,31 @@ export default function ChatPage() {
                     </div>
                   )}
                   <button onClick={() => loadDetail(pair.pair_id)} className="text-xs ml-1 flex items-center gap-1 w-fit" style={{ color: GOLD_DIM }}>
-                    {pair.detail_loading
-                      ? "⏳ 불러오는 중..."
-                      : pair.detail_shown
-                        ? "▲ 접기"
-                        : pair.detail_content && pair.detail_content.length > 1000
-                          ? "▼ 자세한 답변 보기 (길이 초과로 다운로드로 제공)"
-                          : "▼ 자세한 답변 보기"}
+                    {pair.detail_loading ? "⏳ 불러오는 중..." : pair.detail_shown ? "▲ 접기" : "▼ 자세한 답변 보기"}
                   </button>
-                  {pair.detail_shown && pair.detail_content && (
-                    pair.detail_content.length <= 1000 ? (
-                      <div className="px-4 py-3 rounded-2xl text-sm prose prose-sm max-w-none" style={{ backgroundColor: "rgba(212,175,55,0.07)", border: `1px solid rgba(212,175,55,0.25)`, color: "#e8e0d0" }}>
-                        <ReactMarkdown>{fixMarkdown(pair.detail_content)}</ReactMarkdown>
+                  {pair.detail_shown && pair.detail_content && (() => {
+                    const MARKER = "__NEEDS_FULL__";
+                    const markerIdx = pair.detail_content!.indexOf(MARKER);
+                    const bubbleText = markerIdx !== -1 ? pair.detail_content!.slice(0, markerIdx).trim() : pair.detail_content!;
+                    const fullText   = markerIdx !== -1 ? pair.detail_content!.slice(markerIdx + MARKER.length).trim() : null;
+                    const fname = `소피_상세답변_${pair.pair_id.slice(0,6)}`;
+                    return (
+                      <div className="flex flex-col gap-2">
+                        <div className="px-4 py-3 rounded-2xl text-sm prose prose-sm max-w-none" style={{ backgroundColor: "rgba(212,175,55,0.07)", border: `1px solid rgba(212,175,55,0.25)`, color: "#e8e0d0" }}>
+                          <ReactMarkdown>{fixMarkdown(bubbleText)}</ReactMarkdown>
+                        </div>
+                        {fullText && (
+                          <div className="flex flex-col gap-1 ml-1">
+                            <p className="text-xs" style={{ color: GOLD_DIM }}>📎 전체 내용이 길어 요약본을 표시했어요. 전체 답변은 다운로드로 확인하세요.</p>
+                            <div className="flex gap-2">
+                              <button onClick={() => downloadFile(fullText, fname, "txt")} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ backgroundColor: "rgba(212,175,55,0.15)", border: `1px solid ${GOLD_DIM}`, color: GOLD }}>📄 TXT 전체 다운로드</button>
+                              <button onClick={() => downloadFile(fullText, fname, "doc")} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ backgroundColor: "rgba(212,175,55,0.15)", border: `1px solid ${GOLD_DIM}`, color: GOLD }}>📝 Word 전체 다운로드</button>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    ) : (
-                      <div className="flex gap-2 ml-1">
-                        <button onClick={() => downloadFile(pair.detail_content!, `소피_상세답변_${pair.pair_id.slice(0,6)}`, "txt")} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ backgroundColor: "rgba(212,175,55,0.15)", border: `1px solid ${GOLD_DIM}`, color: GOLD }}>📄 TXT 다운로드</button>
-                        <button onClick={() => downloadFile(pair.detail_content!, `소피_상세답변_${pair.pair_id.slice(0,6)}`, "doc")} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ backgroundColor: "rgba(212,175,55,0.15)", border: `1px solid ${GOLD_DIM}`, color: GOLD }}>📝 Word 다운로드</button>
-                      </div>
-                    )
-                  )}
+                    );
+                  })()}
                 </div>
               </div>
             </div>
