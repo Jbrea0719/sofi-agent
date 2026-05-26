@@ -32,6 +32,8 @@ ${sections}
 
 도구 사용 원칙:
 - 확실하지 않은 정보, 최신 내용, 구체적인 사례가 필요하면 반드시 search 도구를 사용해요.
+- 최신 만화/영화/게임 정보는 영어로도 검색하세요. 예: "One Piece latest chapter 2025" 처럼 영어 검색이 더 정확해요.
+- 한 번 검색해서 부족하면 다른 키워드로 추가 검색해요.
 - 검색 결과를 바탕으로 더 정확하고 풍부하게 답해요.
 
 답변 원칙:
@@ -67,10 +69,16 @@ async function runSearch(query: string): Promise<string> {
   }
   try {
     const client = tavily({ apiKey });
-    const response = await client.search(query, { maxResults: 5, searchDepth: "basic" });
-    return response.results
-      .map((r, i) => `${i + 1}. **${r.title}**\n   ${r.content?.slice(0, 200)}`)
+    const response = await client.search(query, {
+      maxResults: 8,
+      searchDepth: "advanced",
+      includeAnswer: true,
+    });
+    const answer = response.answer ? `📌 요약: ${response.answer}\n\n` : "";
+    const results = response.results
+      .map((r, i) => `${i + 1}. **${r.title}**\n   ${r.content?.slice(0, 300)}`)
       .join("\n\n");
+    return answer + results;
   } catch (err) {
     return `검색 오류: ${String(err)}`;
   }
