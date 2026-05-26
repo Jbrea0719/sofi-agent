@@ -20,7 +20,7 @@ async function runSearch(query: string): Promise<string> {
   if (!apiKey) return `[시뮬레이션] "${query}" 검색 결과`;
   try {
     const tv = tavily({ apiKey });
-    const res = await tv.search(query, { maxResults: 8, searchDepth: "advanced", includeAnswer: true });
+    const res = await tv.search(query, { maxResults: 5, searchDepth: "advanced", includeAnswer: true });
     const answer = res.answer ? `요약: ${res.answer}\n\n` : "";
     const results = res.results
       .map((r, i) => `${i + 1}. ${r.title}\n${r.content?.slice(0, 300)}`)
@@ -41,7 +41,7 @@ async function searchAgent(
   round: number
 ): Promise<string> {
   const prompt = round === 0
-    ? `다음 질문에 답하기 위해 필요한 검색어 3개를 뽑아서 각각 검색해줘.\n질문: ${userQuery}`
+    ? `다음 질문에 답하기 위해 필요한 검색어 2개를 뽑아서 각각 검색해줘.\n질문: ${userQuery}`
     : `이전 답변에 대해 다음과 같은 지적이 있었어:\n${critique}\n\n원래 질문: ${userQuery}\n\n지적된 부분을 보완하기 위해 추가로 필요한 정보를 검색해줘.`;
 
   const tools: Anthropic.Tool[] = [{
@@ -57,7 +57,7 @@ async function searchAgent(
   let messages: Anthropic.MessageParam[] = [{ role: "user", content: prompt }];
   let allResults = "";
 
-  for (let turn = 0; turn < 5; turn++) {
+  for (let turn = 0; turn < 3; turn++) {
     const res = await client.messages.create({
       model: "claude-sonnet-4-5",
       max_tokens: 2048,
@@ -175,38 +175,24 @@ async function runMultiAgentPipeline(
   onChunk: (text: string) => void,
   detailed = false
 ): Promise<string> {
-  let critique = "";
-  let finalSummary = "";
   const criticHistory: { round: number; approved: boolean; feedback: string }[] = [];
 
-  for (let round = 0; round < 2; round++) {
-    const roundLabel = round === 0 ? "1차" : "2차 (보완)";
+  // ── 1회 검색 → 정리 → 지적 (재검색 루프 없음 — 속도 최우선)
+  // 에이전트 1: 검색
+  onChunk(`\n🔍 **검색 에이전트** 작동 중...\n`);
+  const searchResults = await searchAgent(userQuery, "", 0);
+  onChunk(`✅ 검색 완료\n\n`);
 
-    // 에이전트 1: 검색
-    onChunk(`\n🔍 **[${roundLabel}] 검색 에이전트** 작동 중...\n`);
-    const searchResults = await searchAgent(userQuery, critique, round);
-    onChunk(`✅ 검색 완료\n\n`);
+  // 에이전트 2: 정리
+  onChunk(`📝 **정리 에이전트** 작동 중...\n`);
+  const finalSummary = await summaryAgent(userQuery, searchResults);
+  onChunk(`✅ 정리 완료\n\n`);
 
-    // 에이전트 2: 정리
-    onChunk(`📝 **[${roundLabel}] 정리 에이전트** 작동 중...\n`);
-    const summary = await summaryAgent(userQuery, searchResults);
-    onChunk(`✅ 정리 완료\n\n`);
-
-    // 에이전트 3: 지적
-    onChunk(`🔎 **[${roundLabel}] 검토 에이전트** 검토 중...\n`);
-    const { approved, feedback } = await criticAgent(userQuery, summary);
-    criticHistory.push({ round: round + 1, approved, feedback });
-
-    if (approved) {
-      onChunk(`✅ 검토 통과! 최종 답변을 드릴게요\n\n---\n\n`);
-      finalSummary = summary;
-      break;
-    } else {
-      onChunk(`⚠️ 보완 필요 — 추가 검색 시작\n\n`);
-      critique = feedback;
-      finalSummary = summary;
-    }
-  }
+  // 에이전트 3: 지적 (결과는 '기획 피드백 보기'에만 표시 — 재검색 트리거 안 함)
+  onChunk(`🔎 **검토 에이전트** 검토 중...\n`);
+  const { approved, feedback } = await criticAgent(userQuery, finalSummary);
+  criticHistory.push({ round: 1, approved, feedback });
+  onChunk(approved ? `✅ 검토 통과!\n\n---\n\n` : `📋 검토 완료 (피드백은 아래 버튼에서 확인)\n\n---\n\n`);
 
   // 소피 말투로 최종 답변 변환
   onChunk(`💬 **소피가 정리한 최종 답변:**\n\n`);
