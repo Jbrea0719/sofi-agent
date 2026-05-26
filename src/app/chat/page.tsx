@@ -391,6 +391,15 @@ export default function ChatPage() {
     await fetch("/api/messages", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pair_id: pairId }) });
   }
 
+  async function bulkPermanentDelete() {
+    if (!confirm(`삭제된 대화 ${deletedPairs.length}개를 모두 영구 삭제할까요?`)) return;
+    const ids = deletedPairs.map((p) => p.pair_id);
+    setPairs((prev) => prev.filter((p) => !p.is_deleted));
+    await Promise.all(ids.map((id) =>
+      fetch("/api/messages", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pair_id: id }) })
+    ));
+  }
+
   function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && e.altKey) {
       // Alt+Enter → 줄바꿈
@@ -592,9 +601,14 @@ export default function ChatPage() {
 
           {deletedPairs.length > 0 && (
             <div className="pt-2">
-              <button onClick={() => setShowDeleted(!showDeleted)} className="text-xs mx-auto flex items-center gap-1 px-3 py-1 rounded-full" style={{ color: GOLD_DIM, backgroundColor: "rgba(212,175,55,0.07)", border: `1px solid ${GOLD_FAINT}` }}>
-                {showDeleted ? "▲" : "▼"} 삭제된 대화 {deletedPairs.length}개
-              </button>
+              <div className="flex items-center justify-center gap-2">
+                <button onClick={() => setShowDeleted(!showDeleted)} className="text-xs flex items-center gap-1 px-3 py-1 rounded-full" style={{ color: GOLD_DIM, backgroundColor: "rgba(212,175,55,0.07)", border: `1px solid ${GOLD_FAINT}` }}>
+                  {showDeleted ? "▲" : "▼"} 삭제된 대화 {deletedPairs.length}개
+                </button>
+                <button onClick={bulkPermanentDelete} className="text-xs flex items-center gap-1 px-3 py-1 rounded-full" style={{ color: "#f87171", backgroundColor: "rgba(255,50,50,0.07)", border: "1px solid rgba(255,50,50,0.2)" }}>
+                  🗑️ 일괄 삭제
+                </button>
+              </div>
               {showDeleted && (
                 <div className="space-y-4 mt-3">
                   {deletedPairs.map((pair) => (
