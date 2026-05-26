@@ -265,11 +265,8 @@ export default function ChatPage() {
     }
     setPairs((prev) => prev.map((p) => p.pair_id === pairId ? { ...p, detail_loading: true, detail_shown: true } : p));
     try {
+      // 이전 대화 기록 제외 — 현재 Q&A만 전달해서 입력 토큰 절약 (출력 공간 확보)
       const context = [
-        ...pairs.filter(p => !p.is_deleted && p.pair_id !== pairId).flatMap(p => [
-          { role: p.user.role, content: p.user.content },
-          { role: p.assistant.role, content: p.assistant.content },
-        ]),
         { role: "user" as const, content: pair.user.content },
         { role: "assistant" as const, content: pair.assistant.content },
         { role: "user" as const, content: "위 답변을 더 자세하고 풍부하게 설명해줘." },
