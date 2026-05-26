@@ -23,6 +23,9 @@ type MessagePair = {
   timestamp?: string;
   critic_history?: CriticEntry[];
   critic_shown?: boolean;
+  feedback_summary?: string;
+  feedback_summary_loading?: boolean;
+  feedback_summary_shown?: boolean;
 };
 
 function getTime() {
@@ -293,6 +296,46 @@ export default function ChatPage() {
     }
   }
 
+  async function loadFeedbackSummary(pairId: string) {
+    const pair = pairs.find(p => p.pair_id === pairId);
+    if (!pair || !pair.critic_history || pair.critic_history.length === 0) return;
+    if (pair.feedback_summary) {
+      setPairs(prev => prev.map(p => p.pair_id === pairId ? { ...p, feedback_summary_shown: !p.feedback_summary_shown } : p));
+      return;
+    }
+    setPairs(prev => prev.map(p => p.pair_id === pairId ? { ...p, feedback_summary_loading: true, feedback_summary_shown: true } : p));
+    try {
+      const feedbackText = pair.critic_history
+        .map(c => `[${c.approved ? "통과" : "보완 요청"}]\n${c.feedback.replace(/^(APPROVED|NEEDS_IMPROVEMENT)[^\n]*/i, "").trim()}`)
+        .join("\n\n");
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: [{
+            role: "user",
+            content: `다음 기획 검토 피드백을 500자 이내로 요약해줘.\n통과된 항목, 지적된 문제, 핵심 보완 포인트를 간결하게 정리해줘.\n반드시 500자를 초과하지 마. 소피 말투로.\n\n${feedbackText}`,
+          }],
+          detailed: true,
+        }),
+      });
+      if (!response.ok || !response.body) throw new Error("오류");
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let text = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        text += decoder.decode(value);
+        setPairs(prev => prev.map(p => p.pair_id === pairId ? { ...p, feedback_summary: text } : p));
+      }
+    } catch {
+      setPairs(prev => prev.map(p => p.pair_id === pairId ? { ...p, feedback_summary: "요약을 불러오지 못했어요." } : p));
+    } finally {
+      setPairs(prev => prev.map(p => p.pair_id === pairId ? { ...p, feedback_summary_loading: false } : p));
+    }
+  }
+
   async function deletePair(pairId: string) {
     setPairs((prev) => prev.map((p) => p.pair_id === pairId ? { ...p, is_deleted: true } : p));
     await fetch("/api/messages", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pair_id: pairId, is_deleted: true }) });
@@ -409,39 +452,24 @@ export default function ChatPage() {
                       <button onClick={() => downloadFile(pair.assistant.content, "doc")} className="text-xs px-2 py-1 rounded-lg" style={{ backgroundColor: "rgba(212,175,55,0.1)", border: `1px solid ${GOLD_FAINT}`, color: GOLD_DIM }}>📝 Word</button>
                     </div>
                   )}
-                  {pair.critic_history && pair.critic_history.length > 0 && (
-                    <div className="ml-1">
-                      <button
-                        onClick={() => setPairs(prev => prev.map(p => p.pair_id === pair.pair_id ? { ...p, critic_shown: !p.critic_shown } : p))}
-                        className="text-xs flex items-center gap-1 w-fit"
-                        style={{ color: "rgba(52,211,153,0.7)" }}>
-                        {pair.critic_shown ? "▲ 기획 피드백 접기" : "🎮 기획 피드백 보기"}
+                  {/* 버튼 행: 자세한 답변 보기 + 기획 피드백 내용 */}
+                  <div className="flex items-center gap-4 ml-1 mt-1 flex-wrap">
+                    <button onClick={() => loadDetail(pair.pair_id)} className="text-xs flex items-center gap-1 w-fit" style={{ color: GOLD_DIM }}>
+                      {pair.detail_loading ? "⏳ 불러오는 중..." : pair.detail_shown ? "▲ 접기" : "▼ 자세한 답변 보기"}
+                    </button>
+                    {pair.critic_history && pair.critic_history.length > 0 && (
+                      <button onClick={() => loadFeedbackSummary(pair.pair_id)} className="text-xs flex items-center gap-1 w-fit" style={{ color: "rgba(52,211,153,0.7)" }}>
+                        {pair.feedback_summary_loading ? "⏳ 불러오는 중..." : pair.feedback_summary_shown ? "▲ 피드백 접기" : "📋 기획 피드백 내용"}
                       </button>
-                      {pair.critic_shown && (
-                        <div className="mt-2 space-y-2">
-                          {pair.critic_history.map((c) => (
-                            <div key={c.round} className="px-3 py-2 rounded-xl text-xs" style={{ backgroundColor: c.approved ? "rgba(52,211,153,0.08)" : "rgba(251,191,36,0.08)", border: `1px solid ${c.approved ? "rgba(52,211,153,0.25)" : "rgba(251,191,36,0.25)"}` }}>
-                              <div className="flex items-center gap-1.5 mb-2 font-semibold" style={{ color: c.approved ? "#34d399" : "#fbbf24" }}>
-                                {c.approved ? "✅" : "⚠️"} {c.round}차 기획 검토 — {c.approved ? "통과" : "보완 요청"}
-                              </div>
-                              <div className="prose prose-sm max-w-none leading-relaxed" style={{ color: "#c8c0b0" }}>
-                                <ReactMarkdown>{
-                                  c.feedback
-                                    .replace(/^(APPROVED|NEEDS_IMPROVEMENT)[^\n]*/i, "")
-                                    .replace(/#+\s*(APPROVED|NEEDS_IMPROVEMENT)[^\n]*/gi, "")
-                                    .replace(/^\s*---\s*$/gm, "")
-                                    .trim()
-                                }</ReactMarkdown>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                    )}
+                  </div>
+                  {/* 기획 피드백 요약 패널 */}
+                  {pair.feedback_summary_shown && pair.feedback_summary && (
+                    <div className="px-4 py-3 rounded-2xl text-sm prose prose-sm max-w-none" style={{ backgroundColor: "rgba(52,211,153,0.06)", border: "1px solid rgba(52,211,153,0.2)", color: "#e8e0d0" }}>
+                      <p className="text-xs font-semibold mb-2 not-prose" style={{ color: "rgba(52,211,153,0.85)" }}>📋 기획 피드백 요약</p>
+                      <ReactMarkdown>{pair.feedback_summary}</ReactMarkdown>
                     </div>
                   )}
-                  <button onClick={() => loadDetail(pair.pair_id)} className="text-xs ml-1 flex items-center gap-1 w-fit" style={{ color: GOLD_DIM }}>
-                    {pair.detail_loading ? "⏳ 불러오는 중..." : pair.detail_shown ? "▲ 접기" : "▼ 자세한 답변 보기"}
-                  </button>
                   {pair.detail_shown && pair.detail_content && (() => {
                     // 혹시 남아있을 수 있는 에이전트 마커 제거
                     const rawDetail = pair.detail_content!
