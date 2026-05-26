@@ -172,7 +172,8 @@ async function criticAgent(
 // ════════════════════════════════════════
 async function runMultiAgentPipeline(
   userQuery: string,
-  onChunk: (text: string) => void
+  onChunk: (text: string) => void,
+  detailed = false
 ): Promise<string> {
   let critique = "";
   let finalSummary = "";
@@ -209,13 +210,21 @@ async function runMultiAgentPipeline(
   onChunk(`💬 **소피가 정리한 최종 답변:**\n\n`);
   const finalRes = await client.messages.create({
     model: "claude-sonnet-4-5",
-    max_tokens: 2048,
-    system: `당신의 이름은 소피예요. 귀엽고 발랄하지만 영웅수집형 게임과 세계관에 엄청나게 박식한 소녀 게임 기획 전문가예요.
+    max_tokens: detailed ? 8192 : 800,
+    system: detailed
+      ? `당신의 이름은 소피예요. 귀엽고 발랄하지만 영웅수집형 게임과 세계관에 엄청나게 박식한 소녀 게임 기획 전문가예요.
 - "~이에요", "~거든요", "~죠?" 같은 친근하고 귀여운 말투를 써요
 - 핵심 단어는 **굵게** 강조해요
 - "오오!", "와!" 같은 감탄사를 자연스럽게 써요
-- 게임 기획 관점의 인사이트를 자연스럽게 녹여서 전달해요
-- 구조화된 정보(영웅 카드 잠재력, 스토리 활용 등)는 섹션별로 명확하게 전달해요`,
+- 기본 답변의 보충 설명으로, 내용을 완전히 마무리해주세요.
+- 헤더(#), 목록(-, •), 표 등 구조가 도움된다면 자유롭게 사용하세요.`
+      : `당신의 이름은 소피예요. 귀엽고 발랄하지만 영웅수집형 게임과 세계관에 엄청나게 박식한 소녀 게임 기획 전문가예요.
+- "~이에요", "~거든요", "~죠?" 같은 친근하고 귀여운 말투를 써요
+- 핵심 단어는 **굵게** 강조해요
+- "오오!", "와!" 같은 감탄사를 자연스럽게 써요
+- 헤더(#)나 목록(-, •, 번호) 없이 순수 대화체로만 답해요.
+- 1~3문장으로 핵심만 전달해요.
+- 답변이 길어질 것 같으면 스스로 잘라서 "자세한 내용은 ▼ 자세한 답변 보기에서 이어서 확인하세요!" 로 마무리해요.`,
     messages: [{
       role: "user",
       content: `다음 내용을 소피의 말투로 자연스럽게 전달해줘:\n\n${finalSummary}`
@@ -236,10 +245,11 @@ type Message = { role: "user" | "assistant"; content: string };
 
 export async function POST(request: Request) {
   try {
-    const { messages, session_id, pair_id } = (await request.json()) as {
+    const { messages, session_id, pair_id, detailed } = (await request.json()) as {
       messages: Message[];
       session_id?: string;
       pair_id?: string;
+      detailed?: boolean;
     };
 
     const userMessage = messages[messages.length - 1];
@@ -249,7 +259,7 @@ export async function POST(request: Request) {
         const encode = (text: string) =>
           controller.enqueue(new TextEncoder().encode(text));
         try {
-          const assistantText = await runMultiAgentPipeline(userMessage.content, encode);
+          const assistantText = await runMultiAgentPipeline(userMessage.content, encode, detailed);
           if (session_id && pair_id) {
             await supabase.from("messages").insert([
               { session_id, pair_id, role: "user", content: userMessage.content, universes: "전체", is_deleted: false },

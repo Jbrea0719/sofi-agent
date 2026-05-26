@@ -34,6 +34,21 @@ const GOLD = "#d4af37";
 const GOLD_DIM = "rgba(212,175,55,0.5)";
 const GOLD_FAINT = "rgba(212,175,55,0.15)";
 
+function downloadFile(content: string, filename: string, type: "txt" | "doc") {
+  const isDoc = type === "doc";
+  const body = isDoc
+    ? `<html><head><meta charset='utf-8'></head><body style='font-family:맑은 고딕,Arial;font-size:11pt;line-height:1.8'>${content.replace(/\n/g, "<br>")}</body></html>`
+    : content;
+  const mime = isDoc ? "application/msword" : "text/plain";
+  const blob = new Blob([isDoc ? "﻿" : "", body], { type: `${mime};charset=utf-8` });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${filename}.${type}`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function fixMarkdown(text: string): string {
   return text
     .replace(/\*\*"([^"]+)"\*\*/g, "**$1**")
@@ -325,13 +340,32 @@ export default function ChatPage() {
                   <div className="px-4 py-3 rounded-2xl rounded-tl-sm text-sm prose prose-sm max-w-none" style={{ backgroundColor: "rgba(255,255,255,0.05)", border: `1px solid ${GOLD_FAINT}`, color: "#e8e0d0", backdropFilter: "blur(10px)" }}>
                     <ReactMarkdown>{fixMarkdown(pair.assistant.content)}</ReactMarkdown>
                   </div>
+                  {pair.assistant.content.length > 2000 && (
+                    <div className="flex gap-2 ml-1 mt-1">
+                      <button onClick={() => downloadFile(pair.assistant.content, `소피_답변_${pair.pair_id.slice(0,6)}`, "txt")} className="text-xs px-2 py-1 rounded-lg" style={{ backgroundColor: "rgba(212,175,55,0.1)", border: `1px solid ${GOLD_FAINT}`, color: GOLD_DIM }}>📄 TXT</button>
+                      <button onClick={() => downloadFile(pair.assistant.content, `소피_답변_${pair.pair_id.slice(0,6)}`, "doc")} className="text-xs px-2 py-1 rounded-lg" style={{ backgroundColor: "rgba(212,175,55,0.1)", border: `1px solid ${GOLD_FAINT}`, color: GOLD_DIM }}>📝 Word</button>
+                    </div>
+                  )}
                   <button onClick={() => loadDetail(pair.pair_id)} className="text-xs ml-1 flex items-center gap-1 w-fit" style={{ color: GOLD_DIM }}>
-                    {pair.detail_loading ? "⏳ 불러오는 중..." : pair.detail_shown ? "▲ 접기" : "▼ 자세한 답변 보기"}
+                    {pair.detail_loading
+                      ? "⏳ 불러오는 중..."
+                      : pair.detail_shown
+                        ? "▲ 접기"
+                        : pair.detail_content && pair.detail_content.length > 1000
+                          ? "▼ 자세한 답변 보기 (길이 초과로 다운로드로 제공)"
+                          : "▼ 자세한 답변 보기"}
                   </button>
                   {pair.detail_shown && pair.detail_content && (
-                    <div className="px-4 py-3 rounded-2xl text-sm prose prose-sm max-w-none" style={{ backgroundColor: "rgba(212,175,55,0.07)", border: `1px solid rgba(212,175,55,0.25)`, color: "#e8e0d0" }}>
-                      <ReactMarkdown>{fixMarkdown(pair.detail_content)}</ReactMarkdown>
-                    </div>
+                    pair.detail_content.length <= 1000 ? (
+                      <div className="px-4 py-3 rounded-2xl text-sm prose prose-sm max-w-none" style={{ backgroundColor: "rgba(212,175,55,0.07)", border: `1px solid rgba(212,175,55,0.25)`, color: "#e8e0d0" }}>
+                        <ReactMarkdown>{fixMarkdown(pair.detail_content)}</ReactMarkdown>
+                      </div>
+                    ) : (
+                      <div className="flex gap-2 ml-1">
+                        <button onClick={() => downloadFile(pair.detail_content!, `소피_상세답변_${pair.pair_id.slice(0,6)}`, "txt")} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ backgroundColor: "rgba(212,175,55,0.15)", border: `1px solid ${GOLD_DIM}`, color: GOLD }}>📄 TXT 다운로드</button>
+                        <button onClick={() => downloadFile(pair.detail_content!, `소피_상세답변_${pair.pair_id.slice(0,6)}`, "doc")} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ backgroundColor: "rgba(212,175,55,0.15)", border: `1px solid ${GOLD_DIM}`, color: GOLD }}>📝 Word 다운로드</button>
+                      </div>
+                    )
                   )}
                 </div>
               </div>
