@@ -366,6 +366,7 @@ export default function ChatPage() {
         if (done) break;
         text += decoder.decode(value);
         setPairs(prev => prev.map(p => p.pair_id === pairId ? { ...p, feedback_summary: text.replace("__TRUNCATED__", "") } : p));
+        scrollToBottom();
       }
       const finalFeedbackText = text.includes("__TRUNCATED__") ? cleanTruncated(text) : text;
       setPairs(prev => prev.map(p => p.pair_id === pairId ? { ...p, feedback_summary: finalFeedbackText } : p));
