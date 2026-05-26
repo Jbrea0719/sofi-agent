@@ -271,7 +271,7 @@ export default function ChatPage() {
         { role: "assistant" as const, content: pair.assistant.content },
         { role: "user" as const, content: "위 답변을 더 자세하고 풍부하게 설명해줘." },
       ];
-      const response = await fetch("/api/agent", {
+      const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages: context, detailed: true }),
@@ -443,10 +443,14 @@ export default function ChatPage() {
                     {pair.detail_loading ? "⏳ 불러오는 중..." : pair.detail_shown ? "▲ 접기" : "▼ 자세한 답변 보기"}
                   </button>
                   {pair.detail_shown && pair.detail_content && (() => {
+                    // 혹시 남아있을 수 있는 에이전트 마커 제거
+                    const rawDetail = pair.detail_content!
+                      .replace(/\n__SOFI_CRITIC_START__[\s\S]*?__SOFI_CRITIC_END__/, "")
+                      .replace(/.*__SOFI_ANSWER_START__/, "");
                     const MARKER = "__NEEDS_FULL__";
-                    const markerIdx = pair.detail_content!.indexOf(MARKER);
-                    const bubbleText = markerIdx !== -1 ? pair.detail_content!.slice(0, markerIdx).trim() : pair.detail_content!;
-                    const fullText   = markerIdx !== -1 ? pair.detail_content!.slice(markerIdx + MARKER.length).trim() : null;
+                    const markerIdx = rawDetail.indexOf(MARKER);
+                    const bubbleText = markerIdx !== -1 ? rawDetail.slice(0, markerIdx).trim() : rawDetail.trim();
+                    const fullText   = markerIdx !== -1 ? rawDetail.slice(markerIdx + MARKER.length).trim() : null;
                     return (
                       <div className="flex flex-col gap-2">
                         <div className="px-4 py-3 rounded-2xl text-sm prose prose-sm max-w-none" style={{ backgroundColor: "rgba(212,175,55,0.07)", border: `1px solid rgba(212,175,55,0.25)`, color: "#e8e0d0" }}>
