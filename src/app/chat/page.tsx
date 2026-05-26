@@ -61,7 +61,7 @@ function getUniqueFilename(base: string, ext: string): string {
   }
 }
 
-async function downloadFile(content: string, type: "txt" | "doc") {
+async function downloadFile(content: string, type: "txt" | "md") {
   let title = "소피_답변";
   try {
     const res = await fetch("/api/title", {
@@ -76,12 +76,8 @@ async function downloadFile(content: string, type: "txt" | "doc") {
   const base = `${title}_${getDateStr()}`;
   const filename = getUniqueFilename(base, type);
 
-  const isDoc = type === "doc";
-  const body = isDoc
-    ? `<html><head><meta charset='utf-8'></head><body style='font-family:맑은 고딕,Arial;font-size:11pt;line-height:1.8'>${content.replace(/\n/g, "<br>")}</body></html>`
-    : content;
-  const mime = isDoc ? "application/msword" : "text/plain";
-  const blob = new Blob([isDoc ? "﻿" : "", body], { type: `${mime};charset=utf-8` });
+  const mime = type === "md" ? "text/markdown" : "text/plain";
+  const blob = new Blob([content], { type: `${mime};charset=utf-8` });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -327,6 +323,7 @@ export default function ChatPage() {
         if (done) break;
         text += decoder.decode(value);
         setPairs((prev) => prev.map((p) => p.pair_id === pairId ? { ...p, detail_content: text.replace("__TRUNCATED__", "") } : p));
+        scrollToBottom();
       }
       const finalDetailText = text.includes("__TRUNCATED__") ? cleanTruncated(text) : text;
       setPairs((prev) => prev.map((p) => p.pair_id === pairId ? { ...p, detail_content: finalDetailText } : p));
@@ -489,12 +486,6 @@ export default function ChatPage() {
                   <div className="px-4 py-3 rounded-2xl rounded-tl-sm text-sm prose prose-sm max-w-none" style={{ backgroundColor: "rgba(255,255,255,0.05)", border: `1px solid ${GOLD_FAINT}`, color: "#e8e0d0", backdropFilter: "blur(10px)" }}>
                     <ReactMarkdown>{fixMarkdown(pair.assistant.content)}</ReactMarkdown>
                   </div>
-                  {pair.assistant.content.length > 2000 && (
-                    <div className="flex gap-2 ml-1 mt-1">
-                      <button onClick={() => downloadFile(pair.assistant.content, "txt")} className="text-xs px-2 py-1 rounded-lg" style={{ backgroundColor: "rgba(212,175,55,0.1)", border: `1px solid ${GOLD_FAINT}`, color: GOLD_DIM }}>📄 TXT</button>
-                      <button onClick={() => downloadFile(pair.assistant.content, "doc")} className="text-xs px-2 py-1 rounded-lg" style={{ backgroundColor: "rgba(212,175,55,0.1)", border: `1px solid ${GOLD_FAINT}`, color: GOLD_DIM }}>📝 Word</button>
-                    </div>
-                  )}
                   {/* 버튼 행: 자세한 답변 보기 + 기획 피드백 내용 */}
                   <div className="flex items-center gap-4 ml-1 mt-1 flex-wrap">
                     <button onClick={() => loadDetail(pair.pair_id)} className="text-xs flex items-center gap-1 w-fit" style={{ color: GOLD_DIM }}>
@@ -527,12 +518,12 @@ export default function ChatPage() {
                         <div className="px-4 py-3 rounded-2xl text-sm prose prose-sm max-w-none" style={{ backgroundColor: "rgba(212,175,55,0.07)", border: `1px solid rgba(212,175,55,0.25)`, color: "#e8e0d0" }}>
                           <ReactMarkdown>{fixMarkdown(bubbleText)}</ReactMarkdown>
                         </div>
-                        {fullText && (
+                        {fullText && !pair.detail_loading && (
                           <div className="flex flex-col gap-1 ml-1">
                             <p className="text-xs" style={{ color: GOLD_DIM }}>📎 전체 내용이 길어 요약본을 표시했어요. 전체 답변은 다운로드로 확인하세요.</p>
                             <div className="flex gap-2">
                               <button onClick={() => downloadFile(fullText, "txt")} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ backgroundColor: "rgba(212,175,55,0.15)", border: `1px solid ${GOLD_DIM}`, color: GOLD }}>📄 TXT 전체 다운로드</button>
-                              <button onClick={() => downloadFile(fullText, "doc")} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ backgroundColor: "rgba(212,175,55,0.15)", border: `1px solid ${GOLD_DIM}`, color: GOLD }}>📝 Word 전체 다운로드</button>
+                              <button onClick={() => downloadFile(fullText, "md")} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ backgroundColor: "rgba(212,175,55,0.15)", border: `1px solid ${GOLD_DIM}`, color: GOLD }}>📝 MD 전체 다운로드</button>
                             </div>
                           </div>
                         )}
