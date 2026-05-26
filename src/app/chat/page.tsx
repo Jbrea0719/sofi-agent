@@ -208,8 +208,16 @@ export default function ChatPage() {
     await fetch("/api/messages", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pair_id: pairId }) });
   }
 
-  function handleKeyDown(e: KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === "Enter" && e.altKey) {
+      // Alt+Enter → 줄바꿈
+      e.preventDefault();
+      setInput((prev) => prev + "\n");
+    } else if (e.key === "Enter" && !e.shiftKey && !e.altKey) {
+      // Enter → 전송
+      e.preventDefault();
+      sendMessage();
+    }
   }
 
   const activePairs = pairs.filter((p) => !p.is_deleted);
@@ -373,12 +381,27 @@ export default function ChatPage() {
           style={{ backgroundColor: GOLD, color: "#0d0d1a", boxShadow: `0 4px 15px rgba(212,175,55,0.4)` }}>↓</button>
       )}
 
-      <div className="px-4 py-3 flex gap-3" style={{ backgroundColor: "rgba(0,0,0,0.5)", borderTop: `1px solid ${GOLD_FAINT}` }}>
-        <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={handleKeyDown}
-          placeholder="질문을 입력하세요... (모르는 건 검색해서 답해요 🔍)"
+      <div className="px-4 py-3 flex gap-3 items-end" style={{ backgroundColor: "rgba(0,0,0,0.5)", borderTop: `1px solid ${GOLD_FAINT}` }}>
+        <textarea value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={handleKeyDown}
+          placeholder={"질문을 입력하세요... (Enter 전송 / Alt+Enter 줄바꿈)"}
           disabled={isLoading} autoComplete="off" autoCorrect="off" spellCheck={false}
-          className="flex-1 px-4 py-3 rounded-xl text-sm outline-none"
-          style={{ backgroundColor: "rgba(255,255,255,0.07)", border: `1px solid ${GOLD_FAINT}`, color: "#e8e0d0" }} />
+          rows={1}
+          className="flex-1 px-4 py-3 rounded-xl text-sm outline-none resize-none"
+          style={{
+            backgroundColor: "rgba(255,255,255,0.07)",
+            border: `1px solid ${GOLD_FAINT}`,
+            color: "#e8e0d0",
+            maxHeight: "160px",
+            overflowY: "auto",
+            lineHeight: "1.5",
+            scrollbarWidth: "thin",
+            scrollbarColor: `${GOLD_DIM} transparent`,
+          }}
+          onInput={(e) => {
+            const el = e.currentTarget;
+            el.style.height = "auto";
+            el.style.height = Math.min(el.scrollHeight, 160) + "px";
+          }} />
         <button onClick={sendMessage} disabled={isLoading || !input.trim()}
           className="w-11 h-11 rounded-xl flex items-center justify-center text-base flex-shrink-0 font-bold disabled:opacity-40"
           style={{ backgroundColor: GOLD, color: "#0d0d1a", boxShadow: `0 4px 15px rgba(212,175,55,0.3)` }}>➤</button>
